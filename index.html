@@ -15,7 +15,8 @@
             height: 100%;
             font-family: 'Inter', sans-serif;
             color: white;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
             background: linear-gradient(45deg, #3a1c00, #6b3b00, #4a2b00, #7b4b00);
             background-size: 400% 400%;
             animation: gradientShift 15s ease infinite;
@@ -27,91 +28,97 @@
         }
         #ui-container {
             width: 100%;
-            height: 100%;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             gap: 1rem;
+            padding: 1rem;
+            box-sizing: border-box;
         }
         .glass-panel {
             background: rgba(35, 35, 45, 0.6);
-            backdrop-filter: blur(20px) saturate(180%);
-            border-radius: 20px;
+            backdrop-filter: blur(10px) saturate(180%);
+            border-radius: 15px;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 2rem;
-            width: clamp(600px, 80vw, 800px);
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 800px;
             text-align: center;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.37);
             transition: transform 0.3s ease, opacity 0.3s ease;
         }
         .glass-panel h1 {
-            font-size: 2.5rem;
+            font-size: clamp(1.5rem, 6vw, 2rem);
             font-weight: 700;
             margin: 0;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
         }
         .glass-panel p {
-            font-size: 1.2rem;
-            line-height: 1.6;
+            font-size: clamp(0.9rem, 4vw, 1.1rem);
+            line-height: 1.5;
             opacity: 0.9;
+            margin: 0.5rem 0;
         }
         .answer-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-top: 1.5rem;
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+            margin-top: 1rem;
         }
         .answer-button {
             background: rgba(50, 50, 70, 0.7);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(8px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            padding: 1rem;
+            border-radius: 8px;
+            padding: 0.75rem;
             color: white;
-            font-size: 1rem;
+            font-size: clamp(0.9rem, 3.5vw, 1rem);
             cursor: pointer;
             transition: transform 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
             text-align: left;
+            min-height: 48px;
+            touch-action: manipulation;
         }
         .answer-button:hover {
-            transform: scale(1.05);
+            transform: scale(1.03);
             background: rgba(70, 70, 100, 0.8);
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
         }
         .correct {
             background: rgba(0, 255, 0, 0.5);
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.7);
+            box-shadow: 0 0 16px rgba(0, 255, 0, 0.7);
             animation: pulse 1s infinite;
         }
         .incorrect {
             background: rgba(255, 0, 0, 0.5);
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
+            box-shadow: 0 0 16px rgba(255, 0, 0, 0.7);
         }
         @keyframes pulse {
             0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+            50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
         @keyframes slideIn {
-            from { transform: translateY(50px); opacity: 0; }
+            from { transform: translateY(30px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
         }
         .question-enter {
             animation: slideIn 0.5s ease forwards;
         }
         #file-upload-container {
-            margin: 1rem 0;
+            margin: 0.75rem 0;
             display: none;
         }
         #toggle-upload {
-            width: 30px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             background: rgba(255, 255, 255, 0);
             border: 1px solid rgba(94, 94, 94, 0);
             border-radius: 0%;
             color: white;
-            font-size: 1.5rem;
+            font-size: clamp(1.2rem, 4vw, 1.5rem);
             cursor: pointer;
             display: flex;
             justify-content: center;
@@ -125,23 +132,66 @@
         }
         #file-input-button {
             background: rgba(50, 50, 70, 0.7);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(8px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            padding: 0.75rem 1.25rem;
             color: white;
-            font-size: 1rem;
+            font-size: clamp(0.9rem, 3.5vw, 1rem);
             cursor: pointer;
             transition: transform 0.3s ease, background 0.3s ease;
+            min-height: 48px;
         }
         #file-input-button:hover {
-            transform: scale(1.05);
+            transform: scale(1.03);
             background: rgba(70, 70, 100, 0.8);
         }
         #score {
-            font-size: 1.5rem;
+            font-size: clamp(1.2rem, 5vw, 1.4rem);
             font-weight: 700;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        }
+        #colorPickerContainer {
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+        #colorPicker {
+            width: 32px;
+            height: 32px;
+            border: none;
+            cursor: pointer;
+            border-radius: 100%;
+            background-color: transparent;
+        }
+        #alphaSlider {
+            width: 120px;
+            margin-top: 8px;
+        }
+        #alphaValue {
+            font-size: clamp(0.8rem, 3vw, 0.9rem);
+        }
+        @media (min-width: 768px) {
+            .glass-panel {
+                padding: 2rem;
+                width: 80%;
+            }
+            .answer-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+            }
+            .answer-button {
+                padding: 1rem;
+            }
+            #file-input-button {
+                padding: 0.8rem 1.5rem;
+            }
+            #colorPicker {
+                width: 40px;
+                height: 40px;
+            }
+            #alphaSlider {
+                width: 150px;
+            }
         }
     </style>
 </head>
@@ -153,10 +203,10 @@
             <div id="file-upload-container">
                 <input type="file" id="file-input" accept=".csv" style="display: none;">
                 <button id="file-input-button">Choose File</button>
-                <div id="colorPickerContainer" style="text-align: center;">
-                    <input type="color" id="colorPicker" value="#000000" style="width:40px;height:40px;border:none;cursor:pointer; border-radius: 100%; background-color: #11111100;">
+                <div id="colorPickerContainer">
+                    <input type="color" id="colorPicker" value="#000000">
                     <div>
-                        <input type="range" id="alphaSlider" min="0" max="1" step="0.01" value="0.5" style="width:150px;margin-top:10px;">
+                        <input type="range" id="alphaSlider" min="0" max="1" step="0.01" value="0.5">
                         <span id="alphaValue">1.0</span>
                     </div>
                 </div>
