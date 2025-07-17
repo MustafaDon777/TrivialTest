@@ -16,16 +16,14 @@
             font-family: 'Inter', sans-serif;
             color: white;
             overflow: hidden;
-            background-color: #502b00d5;
+            background: linear-gradient(45deg, #3a1c00, #6b3b00, #4a2b00, #7b4b00);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
         }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: -1;
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
         #ui-container {
             width: 100%;
@@ -145,21 +143,9 @@
             font-weight: 700;
             text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
         }
-        #fallback {
-            display: none;
-            text-align: center;
-            padding: 2em;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #111;
-        }
     </style>
 </head>
 <body>
-    <canvas id="webgpu-canvas"></canvas>
     <div id="ui-container">
         <div class="glass-panel">
             <h1>Who Wants to Be a Trivial</h1>
@@ -184,7 +170,9 @@
                         const r = parseInt(color.slice(1, 3), 16);
                         const g = parseInt(color.slice(3, 5), 16);
                         const b = parseInt(color.slice(5, 7), 16);
-                        document.body.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                        document.body.style.background = `linear-gradient(45deg, rgba(${r}, ${g}, ${b}, ${alpha}), rgba(${r}, ${g}, ${b}, ${alpha}), rgba(${r+50}, ${g+50}, ${b+50}, ${alpha}), rgba(${r+100}, ${g+100}, ${b+100}, ${alpha}))`;
+                        document.body.style.backgroundSize = '400% 400%';
+                        document.body.style.animation = 'gradientShift 15s ease infinite';
                         alphaValue.textContent = alpha;
                     }
 
@@ -202,269 +190,146 @@
             <div class="answer-grid" id="answers"></div>
         </div>
     </div>
-    <div id="fallback">
-        <div>
-            <h1>WebGPU Not Supported</h1>
-            <p>Your browser does not support WebGPU. Please try a modern browser like Chrome or Edge.</p>
-        </div>
-    </div>
 
-    <script type="module">
-        async function main() {
-            // WebGPU Setup (unchanged from provided code)
-            if (!navigator.gpu) {
-                document.getElementById('ui-container').style.display = 'none';
-                document.getElementById('fallback').style.display = 'flex';
-                return;
-            }
-            const adapter = await navigator.gpu.requestAdapter();
-            if (!adapter) {
-                document.getElementById('ui-container').style.display = 'none';
-                document.getElementById('fallback').style.display = 'flex';
-                return;
-            }
-            const device = await adapter.requestDevice();
-            const canvas = document.getElementById('webgpu-canvas');
-            const context = canvas.getContext('webgpu');
-            const devicePixelRatio = window.devicePixelRatio || 1;
+    <script>
+        // Game Logic
+        let questions = [];
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let questionOrder = [];
+        let currentWave = 1;
+        const questionsPerWave = 10;
 
-            function configureCanvas() {
-                canvas.width = canvas.clientWidth * devicePixelRatio;
-                canvas.height = canvas.clientHeight * devicePixelRatio;
-                context.configure({
-                    device,
-                    format: presentationFormat,
-                    alphaMode: 'premultiplied',
-                });
-            }
+        // Sound Effects
+        const correctSound = new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
+        const incorrectSound = new Audio('https://www.soundjay.com/buttons/sounds/button-30.mp3');
+        const clickSound = new Audio('https://www.soundjay.com/buttons/sounds/button-16.mp3');
 
-            const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
-            configureCanvas();
+        const fileInput = document.getElementById('file-input');
+        const fileInputButton = document.getElementById('file-input-button');
+        const toggleUploadButton = document.getElementById('toggle-upload');
+        const fileUploadContainer = document.getElementById('file-upload-container');
+        const questionElement = document.getElementById('question');
+        const answersElement = document.getElementById('answers');
+        const scoreElement = document.getElementById('score');
 
-            const shaderModule = device.createShaderModule({
-                code: `
-                    struct Uniforms {
-                        time: f32,
-                        @align(8) resolution: vec2<f32>,
-                    };
-                    @group(0) @binding(0) var<uniform> uniforms: Uniforms;
-                    @vertex
-                    fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-                        let x = f32(i32(in_vertex_index) % 2) * 2.0 - 1.0;
-                        let y = f32(i32(in_vertex_index) / 2) * 2.0 - 1.0;
-                        return vec4<f32>(x, -y, 0.0, 1.0);
+        fileInputButton.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        toggleUploadButton.addEventListener('click', () => {
+            fileUploadContainer.style.display = fileUploadContainer.style.display === 'none' ? 'block' : 'none';
+            toggleUploadButton.textContent = fileUploadContainer.style.display === 'none' ? '' : '';
+        });
+
+        fileInput.addEventListener('change', handleFileUpload);
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const csv = e.target.result;
+                    questions = parseCSV(csv);
+                    if (questions.length > 0) {
+                        // Initialize random question order for first wave
+                        questionOrder = shuffleArray([...Array(questions.length).keys()]).slice(0, questionsPerWave);
+                        displayQuestion();
                     }
-                    @fragment
-                    fn fs_main(@builtin(position) frag_coord: vec4<f32>) -> @location(0) vec4<f32> {
-                        let uv = frag_coord.xy / uniforms.resolution.xy;
-                        let time = uniforms.time * 0.1;
-                        var color = vec3<f32>(0.0);
-                        let color1 = vec3<f32>(sin(uv.x * 5.0 + time), sin(uv.y * 5.0 + time), sin((uv.x + uv.y) * 5.0 + time));
-                        let color2 = vec3<f32>(sin(uv.x * 10.0 - time), sin(uv.y * 10.0 - time), sin((uv.x + uv.y) * 10.0 - time));
-                        let mix_factor = (sin(time + uv.x * 2.0) + 1.0) * 0.5;
-                        color = mix(color1, color2, mix_factor);
-                        for (var i: i32 = 0; i < 5; i = i + 1) {
-                            let fi = f32(i);
-                            let circle_pos = vec2<f32>(sin(time * (0.5 + fi * 0.1)), cos(time * (0.5 + fi * 0.1))) * 0.5 + 0.5;
-                            let dist = distance(uv, circle_pos);
-                            color += vec3<f32>(0.1, 0.2, 0.3) / (dist * 20.0);
-                        }
-                        return vec4<f32>(color * 0.5 + 0.5, 1.0);
-                    }
-                `,
-            });
-
-            const pipeline = device.createRenderPipeline({
-                layout: 'auto',
-                vertex: { module: shaderModule, entryPoint: 'vs_main' },
-                fragment: { module: shaderModule, entryPoint: 'fs_main', targets: [{ format: presentationFormat }] },
-                primitive: { topology: 'triangle-strip' },
-            });
-
-            const uniformBufferSize = 16;
-            const uniformBuffer = device.createBuffer({
-                size: uniformBufferSize,
-                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            });
-            const uniformData = new Float32Array(4);
-            const bindGroup = device.createBindGroup({
-                layout: pipeline.getBindGroupLayout(0),
-                entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
-            });
-
-            window.addEventListener('resize', configureCanvas);
-
-            function frame() {
-                if (!device) return;
-                uniformData[0] = performance.now() / 1000;
-                uniformData[2] = canvas.width;
-                uniformData[3] = canvas.height;
-                device.queue.writeBuffer(uniformBuffer, 0, uniformData);
-                const commandEncoder = device.createCommandEncoder();
-                const textureView = context.getCurrentTexture().createView();
-                const renderPassDescriptor = {
-                    colorAttachments: [{
-                        view: textureView,
-                        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                        loadOp: 'clear',
-                        storeOp: 'store',
-                    }],
                 };
-                const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-                passEncoder.setPipeline(pipeline);
-                passEncoder.setBindGroup(0, bindGroup);
-                passEncoder.draw(4);
-                passEncoder.end();
-                device.queue.submit([commandEncoder.finish()]);
-                requestAnimationFrame(frame);
-            }
-            requestAnimationFrame(frame);
-
-            // Game Logic
-            let questions = [];
-            let currentQuestionIndex = 0;
-            let score = 0;
-            let questionOrder = [];
-            let currentWave = 1;
-            const questionsPerWave = 10;
-
-            // Sound Effects
-            const correctSound = new Audio('https://www.soundjay.com/buttons/sounds/button-09.mp3');
-            const incorrectSound = new Audio('https://www.soundjay.com/buttons/sounds/button-30.mp3');
-            const clickSound = new Audio('https://www.soundjay.com/buttons/sounds/button-16.mp3');
-
-            const fileInput = document.getElementById('file-input');
-            const fileInputButton = document.getElementById('file-input-button');
-            const toggleUploadButton = document.getElementById('toggle-upload');
-            const fileUploadContainer = document.getElementById('file-upload-container');
-            const questionElement = document.getElementById('question');
-            const answersElement = document.getElementById('answers');
-            const scoreElement = document.getElementById('score');
-
-            fileInputButton.addEventListener('click', () => {
-                fileInput.click();
-            });
-
-            toggleUploadButton.addEventListener('click', () => {
-                fileUploadContainer.style.display = fileUploadContainer.style.display === 'none' ? 'block' : 'none';
-                toggleUploadButton.textContent = fileUploadContainer.style.display === 'none' ? '' : '';
-            });
-
-            fileInput.addEventListener('change', handleFileUpload);
-
-            function handleFileUpload(event) {
-                const file = event.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const csv = e.target.result;
-                        questions = parseCSV(csv);
-                        if (questions.length > 0) {
-                            // Initialize random question order for first wave
-                            questionOrder = shuffleArray([...Array(questions.length).keys()]).slice(0, questionsPerWave);
-                            displayQuestion();
-                        }
-                    };
-                    reader.readAsText(file);
-                }
-            }
-
-            function parseCSV(csv) {
-                const lines = csv.trim().split('\n').slice(1).map(line => {
-                    // Remove quotes and split by comma
-                    const items = line.split(',').map(item => item.trim().replace(/^"|"$/g, ''));
-                    return {
-                        question: items[0],
-                        correctAnswer: items[1],
-                        answers: [items[1], items[2], items[3], items[4]]
-                    };
-                });
-                return lines;
-            }
-
-            function shuffleArray(array) {
-                for (let i = array.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [array[i], array[j]] = [array[j], array[i]];
-                }
-                return array;
-            }
-
-            function displayQuestion() {
-                if (currentQuestionIndex >= questionsPerWave) {
-                    if (currentWave * questionsPerWave >= questions.length) {
-                        questionElement.textContent = `Game Over! Final Score: ${score}`;
-                        answersElement.innerHTML = '';
-                        return;
-                    }
-                    currentWave++;
-                    currentQuestionIndex = 0;
-                    questionOrder = shuffleArray([...Array(questions.length).keys()].filter(i => !questionOrder.includes(i))).slice(0, questionsPerWave);
-                    questionElement.textContent = `Wave ${currentWave} - Get ready!`;
-                    answersElement.innerHTML = '';
-                    setTimeout(displayQuestion, 2000);
-                    return;
-                }
-                const q = questions[questionOrder[currentQuestionIndex]];
-                questionElement.textContent = `Wave ${currentWave}: ${q.question}`;
-                questionElement.classList.add('question-enter');
-                answersElement.innerHTML = '';
-                // Randomly assign letters and shuffle answer positions
-                const letters = ['A', 'B', 'C', 'D'];
-                const shuffledAnswers = shuffleArray([...q.answers]);
-                const answerOrder = shuffleArray([0, 1, 2, 3]);
-                const answerButtons = [];
-                
-                shuffledAnswers.forEach((answer, index) => {
-                    const button = document.createElement('button');
-                    button.classList.add('answer-button');
-                    button.textContent = `${letters[index]}. ${answer}`;
-                    button.dataset.answer = answer;
-                    button.addEventListener('click', () => {
-                        clickSound.play().catch(err => console.error('Sound error:', err));
-                        handleAnswer(answer, button);
-                    });
-                    answerButtons.push({ button, order: answerOrder[index] });
-                });
-
-                // Place buttons in random grid positions
-                answerButtons.sort((a, b) => a.order - b.order).forEach(({ button }) => {
-                    answersElement.appendChild(button);
-                    setTimeout(() => button.classList.add('question-enter'), 100);
-                });
-            }
-
-            function handleAnswer(selectedAnswer, button) {
-                const q = questions[questionOrder[currentQuestionIndex]];
-                const buttons = answersElement.getElementsByTagName('button');
-                for (let btn of buttons) {
-                    btn.disabled = true;
-                    if (btn.dataset.answer === q.correctAnswer) {
-                        btn.classList.add('correct');
-                    } else if (btn === button) {
-                        btn.classList.add('incorrect');
-                    }
-                }
-                if (selectedAnswer === q.correctAnswer) {
-                    score += 1;
-                    scoreElement.textContent = `Score: ${score}`;
-                    correctSound.play().catch(err => console.error('Sound error:', err));
-                } else {
-                    incorrectSound.play().catch(err => console.error('Sound error:', err));
-                }
-                setTimeout(() => {
-                    questionElement.classList.remove('question-enter');
-                    currentQuestionIndex++;
-                    displayQuestion();
-                }, 2000);
+                reader.readAsText(file);
             }
         }
 
-        main().catch(err => {
-            console.error(err);
-            document.getElementById('ui-container').style.display = 'none';
-            document.getElementById('fallback').style.display = 'flex';
-        });
+        function parseCSV(csv) {
+            const lines = csv.trim().split('\n').slice(1).map(line => {
+                // Remove quotes and split by comma
+                const items = line.split(',').map(item => item.trim().replace(/^"|"$/g, ''));
+                return {
+                    question: items[0],
+                    correctAnswer: items[1],
+                    answers: [items[1], items[2], items[3], items[4]]
+                };
+            });
+            return lines;
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function displayQuestion() {
+            if (currentQuestionIndex >= questionsPerWave) {
+                if (currentWave * questionsPerWave >= questions.length) {
+                    questionElement.textContent = `Game Over! Final Score: ${score}`;
+                    answersElement.innerHTML = '';
+                    return;
+                }
+                currentWave++;
+                currentQuestionIndex = 0;
+                questionOrder = shuffleArray([...Array(questions.length).keys()].filter(i => !questionOrder.includes(i))).slice(0, questionsPerWave);
+                questionElement.textContent = `Wave ${currentWave} - Get ready!`;
+                answersElement.innerHTML = '';
+                setTimeout(displayQuestion, 2000);
+                return;
+            }
+            const q = questions[questionOrder[currentQuestionIndex]];
+            questionElement.textContent = `Wave ${currentWave}: ${q.question}`;
+            questionElement.classList.add('question-enter');
+            answersElement.innerHTML = '';
+            // Randomly assign letters and shuffle answer positions
+            const letters = ['A', 'B', 'C', 'D'];
+            const shuffledAnswers = shuffleArray([...q.answers]);
+            const answerOrder = shuffleArray([0, 1, 2, 3]);
+            const answerButtons = [];
+            
+            shuffledAnswers.forEach((answer, index) => {
+                const button = document.createElement('button');
+                button.classList.add('answer-button');
+                button.textContent = `${letters[index]}. ${answer}`;
+                button.dataset.answer = answer;
+                button.addEventListener('click', () => {
+                    clickSound.play().catch(err => console.error('Sound error:', err));
+                    handleAnswer(answer, button);
+                });
+                answerButtons.push({ button, order: answerOrder[index] });
+            });
+
+            // Place buttons in random grid positions
+            answerButtons.sort((a, b) => a.order - b.order).forEach(({ button }) => {
+                answersElement.appendChild(button);
+                setTimeout(() => button.classList.add('question-enter'), 100);
+            });
+        }
+
+        function handleAnswer(selectedAnswer, button) {
+            const q = questions[questionOrder[currentQuestionIndex]];
+            const buttons = answersElement.getElementsByTagName('button');
+            for (let btn of buttons) {
+                btn.disabled = true;
+                if (btn.dataset.answer === q.correctAnswer) {
+                    btn.classList.add('correct');
+                } else if (btn === button) {
+                    btn.classList.add('incorrect');
+                }
+            }
+            if (selectedAnswer === q.correctAnswer) {
+                score += 1;
+                scoreElement.textContent = `Score: ${score}`;
+                correctSound.play().catch(err => console.error('Sound error:', err));
+            } else {
+                incorrectSound.play().catch(err => console.error('Sound error:', err));
+            }
+            setTimeout(() => {
+                questionElement.classList.remove('question-enter');
+                currentQuestionIndex++;
+                displayQuestion();
+            }, 2000);
+        }
     </script>
 </body>
 </html>
